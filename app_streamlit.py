@@ -16,12 +16,14 @@ HIGHLIGHT_72H_HOURS = 72       # 72小时内红色高亮
 CSV_FILENAME = "filtered_crypto_data.csv"
 
 
-# ============= 样式美化 & 自适应区 =============
-CUSTOM_CSS = """
+# ============= CSS 模板：日间模式 & 夜间模式 =============
+
+DAY_MODE_CSS = """
 <style>
-/* 整体背景：渐变 */
+/* 整体背景：鲜艳渐变 */
 .stApp {
-    background: linear-gradient(to right, #d4d4d4, #eeeeee);
+    background: linear-gradient(to right, #ff9966, #ff5e62) !important;
+    color: #333333;
 }
 
 /* 修改表格字体大小及配色 */
@@ -33,6 +35,7 @@ table td, table th {
 h1, h2, h3 {
     text-align: center;
     letter-spacing: 1.5px;
+    color: #fff; /* 在渐变背景上用白字 */
 }
 
 /* 提示条圆角，在中间对齐 */
@@ -50,28 +53,79 @@ h1, h2, h3 {
     padding: 1rem;
 }
 
-/* 自定义在小屏时的样式示例 */
-@media (max-width: 768px) {
-    /* 让页面背景在小屏时变为纯色（演示用，实际可删除） */
-    .stApp {
-        background: #ffffff !important;
-    }
+/* 表格容器略加透明背景以便阅读 */
+[data-testid="stDataFrameGenericContainer"] {
+    background-color: rgba(255, 255, 255, 0.8);
+}
 
-    /* 也可以选择隐藏侧边栏或缩减侧边栏宽度
-       下面是示例：隐藏侧边栏，但请按需决定是否保留 
-    */
-    /* 
-    [data-testid="stSidebar"] {
-        display: none !important;
+/* 在小屏幕时的一些调优(可按需调整) */
+@media (max-width: 768px) {
+    .stApp {
+        background: linear-gradient(to top, #ff9966, #ff5e62) !important;
     }
-    */
 }
 </style>
 """
 
-def add_custom_css():
-    """将自定义CSS插入到Streamlit页面。"""
-    st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+NIGHT_MODE_CSS = """
+<style>
+/* 整体背景：深色 */
+.stApp {
+    background-color: #1e1e1e !important;
+    color: #dddddd;
+}
+
+/* 修改表格字体大小及配色：在夜间模式下表头稍微亮些 */
+table td, table th {
+    font-size: 14px;
+    color: #dddddd;
+}
+
+/* 标题使用稍亮的颜色 */
+h1, h2, h3 {
+    text-align: center;
+    letter-spacing: 1.5px;
+    color: #ffffff;
+}
+
+/* 提示条：深背景+浅字 */
+.element-container .stAlert {
+    border-radius: 8px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 60%;
+    background-color: #333333 !important;
+    color: #ffffff !important;
+}
+
+/* 侧边栏 */
+[data-testid="stSidebar"] > div:first-child {
+    align-items: center;
+    text-align: center;
+    padding: 1rem;
+    background-color: #2c2c2c;
+}
+
+/* 表格容器加黑半透明背景 */
+[data-testid="stDataFrameGenericContainer"] {
+    background-color: rgba(50, 50, 50, 0.8);
+}
+
+/* 小屏幕适配 (可按需调整) */
+@media (max-width: 768px) {
+    .stApp {
+        background-color: #121212 !important;
+    }
+}
+</style>
+"""
+
+def apply_theme(is_night_mode=False):
+    """根据是否夜间模式注入不同CSS。"""
+    if is_night_mode:
+        st.markdown(NIGHT_MODE_CSS, unsafe_allow_html=True)
+    else:
+        st.markdown(DAY_MODE_CSS, unsafe_allow_html=True)
 
 
 # ============= 函数定义区 =============
@@ -213,15 +267,20 @@ def classify_potential(market_cap, volume_24h):
 
 
 def main():
-    # 让页面在大屏上更宽一些
     st.set_page_config(page_title="Crypto Newcomers - by FISH", layout="wide")
-    add_custom_css()
 
-    # =========== 侧边栏 ===========
+    # =========== 侧边栏 - 主题选择 & 头像 ===========
     st.sidebar.image("avatar.jpg", caption="制作者: FISH", width=140)
     st.sidebar.markdown("---")
     st.sidebar.title("Crypto Newcomers")
     st.sidebar.markdown("**用途**: 快速筛选市值、交易量都不错的**新上架**币种")
+
+    # 在侧边栏添加夜间模式开关（也可以使用 st.radio / st.selectbox 来做更精细选择）
+    theme_option = st.sidebar.selectbox("选择主题模式", ["白天模式", "夜间模式"])
+    is_night = (theme_option == "夜间模式")
+
+    # 根据是否夜间模式应用不同的 CSS
+    apply_theme(is_night_mode=is_night)
 
     # =========== 主体区域 ===========
     st.title("新上架加密货币筛选器")
@@ -247,7 +306,6 @@ def main():
         - D: 其他
         """)
 
-    # 点击按钮开始获取并筛选
     if st.button("获取并筛选新币"):
         with st.spinner("正在从 CoinMarketCap 获取数据..."):
             data = fetch_coinmarketcap_data()
@@ -274,7 +332,6 @@ def main():
             with st.spinner("正在获取社交媒体和合约信息..."):
                 coin_info_data = fetch_coin_info(id_str)
 
-        # 为结果添加社交链接、合约地址、潜力等级
         for c in coins:
             c_id = str(c["ID"])
             if c_id in coin_info_data:
@@ -293,6 +350,7 @@ def main():
                 c["Telegram"] = "N"
                 c["Contract"] = "N"
 
+            # 潜力等级
             c["Potential Level"] = classify_potential(c["Market Cap"], c["24h Volume"])
 
         # 转成 DataFrame（全部结果）
@@ -315,11 +373,11 @@ def main():
         st.markdown("---")
         st.subheader("按潜力等级分类")
 
-        # 按 S, A, B, C, D 分组展示
-        ratings = ["S", "A", "B", "C", "D"]
+        # 分组展示：S, A, B, C, D
+        ratings = ["S","A","B","C","D"]
         for rating in ratings:
             sub_coins = [c for c in coins if c["Potential Level"] == rating]
-            if not sub_coins:
+            if len(sub_coins) == 0:
                 continue  # 没有该评级的币则跳过
 
             st.markdown(f"### 潜力等级: {rating} (共 {len(sub_coins)} 个)")
@@ -330,32 +388,11 @@ def main():
             )
             st.dataframe(styled_sub_df, use_container_width=True)
 
-        st.markdown("---")
-        st.subheader("详细列表 (全部)")
-        # 不再限制前10，直接逐个打印
-        for i, coin in enumerate(coins, start=1):
-            color_style = "red" if coin["HoursSinceAdded"] <= HIGHLIGHT_72H_HOURS else "black"
-            st.markdown(
-                f"""
-                <p style="color:{color_style}; font-weight:bold; margin-left:20px;">
-                {i}. {coin['Name']} ({coin['Symbol']})  
-                - Market Cap: {coin['Market Cap']:,}  
-                - 24h Volume: {coin['24h Volume']:,}  
-                - Hours Since Added: {coin['HoursSinceAdded']}  
-                - Potential Level: <b>{coin['Potential Level']}</b>  
-                - Twitter: {coin['Twitter']}  
-                - Reddit: {coin['Reddit']}  
-                - Facebook: {coin['Facebook']}  
-                - Telegram: {coin['Telegram']}  
-                - Contract: {coin['Contract']}
-                </p>
-                """,
-                unsafe_allow_html=True
-            )
+    # 不再显示“详细列表 (全部)”，已去除
 
     st.markdown("---")
     st.markdown("<div style='text-align:center;'>Made with ❤️ by <b>FISH</b></div>", unsafe_allow_html=True)
 
-
+# ============= 入口 =============
 if __name__ == "__main__":
     main()
