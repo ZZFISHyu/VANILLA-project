@@ -8,15 +8,15 @@ import requests
 # ============= 配置区 =============
 API_KEY = "1b3b5fbb-fd2a-4376-8b32-c16a0f91c2ca"  # 替换为你的 CoinMarketCap API Key
 CMC_LIMIT = 5000               # 一次获取多少个“最新上架”的币（可适当调大）
-NEW_COIN_MAX_HOURS = 4320     # 180天 (4320小时)
+NEW_COIN_MAX_HOURS = 4320      # 180天 (4320小时)
 MIN_MARKET_CAP = 300_000
 MIN_VOLUME = 30_000
 MIN_LIQUIDITY = 10_000
-HIGHLIGHT_72H_HOURS = 72      # 72小时内红色高亮
+HIGHLIGHT_72H_HOURS = 72       # 72小时内红色高亮
 CSV_FILENAME = "filtered_crypto_data.csv"
 
 
-# ============= 样式美化区 =============
+# ============= 样式美化 & 自适应区 =============
 CUSTOM_CSS = """
 <style>
 /* 整体背景：渐变 */
@@ -49,12 +49,30 @@ h1, h2, h3 {
     text-align: center;
     padding: 1rem;
 }
+
+/* 自定义在小屏时的样式示例 */
+@media (max-width: 768px) {
+    /* 让页面背景在小屏时变为纯色（演示用，实际可删除） */
+    .stApp {
+        background: #ffffff !important;
+    }
+
+    /* 也可以选择隐藏侧边栏或缩减侧边栏宽度
+       下面是示例：隐藏侧边栏，但请按需决定是否保留 
+    */
+    /* 
+    [data-testid="stSidebar"] {
+        display: none !important;
+    }
+    */
+}
 </style>
 """
 
 def add_custom_css():
     """将自定义CSS插入到Streamlit页面。"""
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
+
 
 # ============= 函数定义区 =============
 def clean_number(value):
@@ -193,17 +211,19 @@ def classify_potential(market_cap, volume_24h):
     else:
         return "D"
 
+
 def main():
+    # 让页面在大屏上更宽一些
     st.set_page_config(page_title="Crypto Newcomers - by FISH", layout="wide")
     add_custom_css()
 
-    # 侧边栏
+    # =========== 侧边栏 ===========
     st.sidebar.image("avatar.jpg", caption="制作者: FISH", width=140)
     st.sidebar.markdown("---")
     st.sidebar.title("Crypto Newcomers")
     st.sidebar.markdown("**用途**: 快速筛选市值、交易量都不错的**新上架**币种")
 
-    # 主体区域
+    # =========== 主体区域 ===========
     st.title("新上架加密货币筛选器")
     st.markdown("### 由 **FISH** 倾情打造，助你快速发现新币！")
 
@@ -227,6 +247,7 @@ def main():
         - D: 其他
         """)
 
+    # 点击按钮开始获取并筛选
     if st.button("获取并筛选新币"):
         with st.spinner("正在从 CoinMarketCap 获取数据..."):
             data = fetch_coinmarketcap_data()
@@ -253,7 +274,7 @@ def main():
             with st.spinner("正在获取社交媒体和合约信息..."):
                 coin_info_data = fetch_coin_info(id_str)
 
-        # 赋值到 coins + 分级
+        # 为结果添加社交链接、合约地址、潜力等级
         for c in coins:
             c_id = str(c["ID"])
             if c_id in coin_info_data:
@@ -272,12 +293,11 @@ def main():
                 c["Telegram"] = "N"
                 c["Contract"] = "N"
 
-            # 潜力等级
             c["Potential Level"] = classify_potential(c["Market Cap"], c["24h Volume"])
 
         # 转成 DataFrame（全部结果）
         df = pd.DataFrame(coins)
-        
+
         # 用户可选是否保存
         if st.checkbox("保存筛选结果到 CSV 文件"):
             df.to_csv(CSV_FILENAME, index=False, encoding="utf-8")
@@ -295,16 +315,15 @@ def main():
         st.markdown("---")
         st.subheader("按潜力等级分类")
 
-        # 分组展示：S, A, B, C, D
-        ratings = ["S","A","B","C","D"]
+        # 按 S, A, B, C, D 分组展示
+        ratings = ["S", "A", "B", "C", "D"]
         for rating in ratings:
             sub_coins = [c for c in coins if c["Potential Level"] == rating]
-            if len(sub_coins) == 0:
+            if not sub_coins:
                 continue  # 没有该评级的币则跳过
 
             st.markdown(f"### 潜力等级: {rating} (共 {len(sub_coins)} 个)")
             sub_df = pd.DataFrame(sub_coins)
-            # 同样加 HoursSinceAdded 高亮
             styled_sub_df = sub_df.style.applymap(
                 lambda x: "color: red; font-weight:bold;" if isinstance(x, float) and x <= HIGHLIGHT_72H_HOURS else "",
                 subset=["HoursSinceAdded"]
